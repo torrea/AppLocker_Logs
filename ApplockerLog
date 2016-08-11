@@ -1,0 +1,56 @@
+
+
+$hostpc = Get-Content (Read-Host "Enter filename")
+
+$applocker_log = "Microsoft-Windows-AppLocker/EXE and DLL"
+
+$EAPref = $erroractionpreference
+$erroractionpreference = "SilentlyContinue"
+$a = New-Object -comobject Excel.Application
+$a.visible = $True 
+Add-Type -AssemblyName Microsoft.Office.Interop.Excel
+$xlFixedFormat = [Microsoft.Office.Interop.Excel.XlFileFormat]::xlWorkbookDefault
+
+
+$a.Visible = $true
+
+$b = $a.Workbooks.Add()
+$c = $b.Worksheets.Item(1)
+
+$c.Cells.Item(1,1) = "UserId"
+$c.Cells.Item(1,2) = "FullName"
+$c.Cells.Item(1,3) = "MachineName"
+$c.Cells.Item(1,4) = "TimeCreated"
+$c.Cells.Item(1,5) = "Message"
+
+$d = $c.UsedRange
+$d.Interior.ColorIndex = 19
+$d.Font.ColorIndex = 11
+$d.Font.Bold = $True
+
+$intRow = 2
+
+foreach ($pc in $hostpc) {
+    $PCapplog = Get-WinEvent -ComputerName $pc -LogName $applocker_log|?{$_.message -like "%programfiles%*" -or $_.message -like "%OSDRIVE%\USERS\*"} |select userid,message,timecreated,machinename
+    foreach ($logitem in $PCapplog)
+    {
+        $user = get-aduser $logitem.userid|select givenname,surname,samaccountname
+
+        $c.Cells.Item($intRow, 1) = $USER.samaccountname
+        $c.Cells.Item($intRow, 2) = $($user.givenname) + " " + $($user.surname)
+        $c.Cells.Item($intRow, 3) = $logitem.machinename
+        $c.Cells.Item($intRow, 4) = $logitem.timecreated
+        $c.Cells.Item($intRow, 5) = ($logitem.Message).TrimEnd("was allowed to run but would have been prevented from running if the AppLocker policy were enforced.")
+        $intRow = $intRow + 1
+
+    }
+}
+
+
+$a.workbooks.OpenText($file,437,1,1,1,$True,$True,$False,$False,$True,$False)
+$a.ActiveWorkbook.SaveAs("C:\TEMP\APPLOG.XLSX", $xlFixedFormat)
+
+$a.Workbooks.Close()
+$a.Quit()
+
+$erroractionpreference = $EAPref
